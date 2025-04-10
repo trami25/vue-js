@@ -1,47 +1,90 @@
+
+
+
 <template>
   <div class="container">
       <h1>URL Shortener</h1>
+
       <input v-model="originalUrl" type="text" placeholder="Enter a URL... "/>
       <button @click="shortenUrl">Shorten</button>
 
       <div v-if="shortenedUrl" class="result">
         <p>Shortened URL: </p>
         <div class="short-url">
-        <a :href="shortenedUrl" target="_blank"> {{ shortenedUrl }}</a>
-        <button @click="copzToClipboard">Copy</button>
+        <a :href="shortenedUrl" target="_blank" id="short-url"> {{ shortenedUrl }}</a>
+        <button ref="copyBtn" data-clipboard-target="#short-url">Copy</button>
         </div>
-        <span v-if="copied" class="copued-text">Copied!</span>
+        <span v-if="copied" class="copied-text">Copied!</span>
       </div>
+      <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
   </div>
 </template>
 
 <script>
+import ClipboardJS from 'clipboard';
+import axios from 'axios';
 export default{
   data(){
     return{
       originalUrl: "",
       shortenedUrl: "",
       copied:false,
+      clipboard: null,
+      errorMessage: '',
     };
   },
 
   methods:{
-    shortenUrl() {
-      // Simulate URL shortening
-      if (this.originalUrl.trim() === "") return;
-
-      const randomId = Math.random().toString(36).substring(2, 8);
-      this.shortenedUrl = `https://short.ly/${randomId}`
+    async shortenUrl() {
+      this.errorMessage = '';
+      this.shortenedUrl = '';
       this.copied = false;
+
+      if (!this.originalUrl.trim()) return;
+
+      try{
+        const response = await axios.post(
+          'https://api-ssl.bitly.com/v4/shorten',
+          {
+            long_url: this.originalUrl,
+            domain: 'bit.ly',
+          },
+          {
+            headers: {
+              Authorization: 'Bearer 2442f02ab0859b904ac772d383bddc94941e48bf',
+              'Content-Type' : 'application/json',
+            },
+          }
+        );
+
+        this.shortenedUrl = response.data.link;
+        this.$nextTick(() => this.initClipboard());
+      } catch (error) {
+        console.error(error);
+        this.errorMessage = 'Failed to shorten the URL. Please check the link on your API key';
+      }
     },
-    copyToClipboard() {
-      navigator.clipboard.writeText(this.shortenUrl).then(() =>{
+    initClipboard() {
+      if (this.clipboard) {
+        this.clipboard.destroy();
+      }
+
+      this.clipboard = new ClipboardJS(this.$refs.copyBtn);
+
+      this.clipboard.on('success', () => {
         this.copied = true;
-        setTimeout(() => {
-          this.copied = false;
-        }, 2000);
+        setTimeout(() => (this.copied = false), 2000);
       });
-    },
+
+      this.clipboard.on('error', (e) => {
+        console.error('Clipboard error: ', e);
+      });
+    }, 
+  },
+  beforeUnmount(){
+    if (this.clipboard) {
+      this.clipboard.destroy();
+    }
   },
 };
 </script>
